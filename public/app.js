@@ -147,7 +147,7 @@ $('#product-form').onsubmit = (e) => {
 };
 function renderProducts() {
   $('#product-list').innerHTML = products.length
-    ? products.map(p => `<div class="product"><b>${esc(p.name)}</b><span class="muted"> since ${new Date(p.startedTs).toLocaleDateString()}</span><div>${p.concerns.map(c => `<span class="chip on">${label(c)}</span>`).join('')}</div><button class="del" data-id="${p.id}">Remove</button></div>`).join('')
+    ? products.map(p => `<div class="product"><b>${esc(p.name)}</b><span class="muted">Using since ${new Date(p.startedTs).toLocaleDateString()}</span><div>${p.concerns.map(c => `<span class="chip on">${label(c)}</span>`).join('')}</div><button class="del" data-id="${p.id}">Remove</button></div>`).join('')
     : '<div class="empty">No products yet. Add what you are using so the verdict can say what works.</div>';
   document.querySelectorAll('.del').forEach(b => b.onclick = () => {
     products = products.filter(p => p.id !== b.dataset.id); store.set('st_products', products); renderProducts();

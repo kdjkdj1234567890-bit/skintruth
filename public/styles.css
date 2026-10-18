@@ -41,3 +41,7 @@ h3 { margin:18px 0 10px; }
 .verdict .vhead { font-weight:800; margin-bottom:4px; }
 .verdict.up .vhead { color:var(--good); } .verdict.down .vhead { color:var(--low); } .verdict.flat .vhead { color:var(--mid); }
 footer { margin-top:30px; color:var(--muted); font-size:11px; text-align:center; }
+.product b { display:block; margin-bottom:4px; }
+.product .muted { font-size:12px; }
+.product .del { display:inline-block; margin-top:6px; }
+.product .chip { margin:2px 4px 2px 0; }
