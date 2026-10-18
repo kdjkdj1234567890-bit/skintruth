@@ -43,6 +43,10 @@ transparent and auditable.
 - **Concern heatmap overlays**: each analysis also returns the API's
   per-concern masks, overlaid on the analyzed photo right after the check so
   you can see where the AI looked (signed URLs, shown live, never stored).
+- **Sample verdicts, visibly separated**: on a fresh visit the Verdict tab
+  shows clearly-badged sample verdicts computed only from the sample journey,
+  so judges can see the verdict UI and ingredient pointers immediately -
+  while sample rows still never mix with a user's real checks.
 - **Lighting-consistency caution**: the app computes a rough luminance proxy
   for every photo and flags comparisons where two photos were taken in
   clearly different light - because lighting moves skin scores, and honest
