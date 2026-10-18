@@ -1,12 +1,12 @@
 # SkinTruth - Is your skincare actually working?
 
 ## Inspiration
-Skincare is a $180B industry that runs on hope. People buy a serum, use it for
+Skincare runs on hope. People buy a serum, use it for
 weeks, and decide whether it "works" by looking in the bathroom mirror under
 different lighting every day. There is no measurement, so marketing claims win
-by default. SkinTruth gives regular people the same instrument cosmetic labs
-use: an objective, repeatable skin score - so they can keep what works and
-drop what does not.
+by default. SkinTruth gives regular people an objective, repeatable skin score built on
+Perfect Corp's market-tested Skin AI - so they can see whether their skin
+scores actually moved while using a product.
 
 ## What it does
 SkinTruth is a web app that answers one question honestly: is your skincare
@@ -22,28 +22,35 @@ actually working?
    real API measurement.)
 3. **Products** - Log the products you are using and the concerns each one
    targets.
-4. **Verdict** - SkinTruth ties measured score changes to the products you
-   started, and tells you plainly: "Keep using - it is working", "No
-   measurable effect yet", or "Consider dropping or swapping". The ±5-point
-   threshold keeps noise from becoming a false verdict.
+4. **Verdict** - SkinTruth compares scores before and after you started each
+   product and reports the trend honestly: "scores up since you started (an
+   association, not proof)", "no clear change", or "worth reviewing your
+   routine" - plus an "ingredients often used for this concern" pointer so the
+   loop continues into retail discovery. Sample data never feeds verdicts, a
+   product needs a pre-start baseline and minimum tracking windows (about 3
+   days for surface concerns, 14 for deeper ones), and the 5-point cutoff is
+   labeled an unvalidated heuristic, not statistical significance.
 
 The live API unit balance is shown in the header, so the integration is
 transparent and auditable.
 
 ## How we built it
 - **YouCam AI Skin Analysis API** (Perfect Corp) for the 8 skin concern
-  scores, via the File upload flow: presigned upload, task creation, polling.
+  scores (ui_score fields, where higher means healthier skin), via the File
+  upload flow: presigned upload, task creation, polling.
 - **Node.js serverless functions** on Vercel (`/api/analyze`, `/api/result`,
   `/api/balance`) hold the API key server-side - the browser never sees it.
 - **Zero-dependency front end** (vanilla HTML/CSS/JS). All history and
-  products live in the browser's localStorage: no accounts, no tracking, and
-  your face photos never touch our database because there is no database.
+  products live in the browser's localStorage: no accounts, no tracking, no
+  database. Photos are sent to the SkinTruth backend only to be forwarded to
+  the YouCam API for analysis; nothing is stored server-side.
 - The verdict engine compares latest vs baseline scores per concern with a
   ±5-point significance threshold.
 
 ## Challenges we ran into
-- The API requires the face to cover most of the frame, so the app validates
-  and guides framing before spending API units.
+- The API requires the face to cover most of the frame, so the app guides
+  framing up front ("face should fill most of the frame") and resizes images
+  client-side before upload.
 - Units are only consumed on successful tasks, so the app is careful to create
   one task per check and poll efficiently - important on the free tier.
 - Skin scores fluctuate day to day; the verdict threshold had to be strict
@@ -63,7 +70,8 @@ transparent and auditable.
 - How much framing/face-size constraints matter for consumer selfie flows.
 
 ## What's next for SkinTruth
-- Reminders to re-check on a schedule ("2 weeks since your last check").
-- Per-product start/stop windows so verdicts isolate one product at a time.
-- Before/after overlays using the API's concern heat-maps.
-- Optional account sync for multi-device history.
+- Before/after overlays using the API's concern heat-map masks.
+- Capture-condition matching (lighting/framing consistency score vs baseline)
+  to cut measurement noise.
+- Rolling averages across repeated checks and a confidence indicator.
+- Export/import of on-device history, reminders to re-check, optional sync.

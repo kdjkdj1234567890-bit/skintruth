@@ -77,8 +77,12 @@ $('#btn-analyze').onclick = async () => {
     if (a.error) throw new Error(a.error + (a.detail?.error ? `: ${a.detail.error}` : ''));
     st.textContent = 'Analyzing (usually 10-30s)...';
     const res = await poll(a.task_id);
-    if (res.status === 'error') throw new Error(res.error_message || res.error || 'analysis failed');
-    const check = { id: 'c' + Date.now(), ts: Date.now(), scores: res.scores, skinAge: res.skin_age, thumb: currentImage };
+    if (res.status !== 'success') throw new Error(res.error_message || res.error || 'analysis did not succeed');
+    const keys = CONCERNS.map(c => c[0]);
+    if (!res.scores || !keys.every(k => Number.isFinite(res.scores[k]) && res.scores[k] >= 0 && res.scores[k] <= 100))
+      throw new Error('analysis returned incomplete scores - nothing saved');
+    const thumb = await makeThumb(currentImage);
+    const check = { id: 'c' + Date.now(), ts: Date.now(), scores: res.scores, skinAge: res.skin_age, thumb };
     checks.push(check); store.set('st_checks', checks);
     st.textContent = 'Done.';
     renderScores(check); refreshQuota();
@@ -92,10 +96,53 @@ async function poll(taskId) {
   for (let i = 0; i < 40; i++) {
     await new Promise(r => setTimeout(r, 3000));
     const r = await fetch('/api/result?task_id=' + encodeURIComponent(taskId)).then(r => r.json());
-    if (r.status !== 'running') return r;
+    if (r.status === 'success' || r.status === 'error') return r;
   }
   throw new Error('timed out waiting for analysis');
 }
+function makeThumb(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const w = 120, h = Math.round(img.height * (w / img.width));
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(cv.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+/* Sample journey: clearly-labeled illustrative data, loaded only on explicit click,
+   flagged sample:true so it never feeds verdict math. */
+const SAMPLE_SCORES = [
+  { d: 28, s: { moisture: 62, oiliness: 71, radiance: 74, texture: 81, redness: 82, wrinkle: 88, acne: 78, pore: 76 } },
+  { d: 21, s: { moisture: 66, oiliness: 73, radiance: 77, texture: 83, redness: 85, wrinkle: 89, acne: 82, pore: 78 } },
+  { d: 14, s: { moisture: 70, oiliness: 76, radiance: 81, texture: 87, redness: 87, wrinkle: 91, acne: 86, pore: 81 } },
+  { d: 7,  s: { moisture: 73, oiliness: 77, radiance: 83, texture: 89, redness: 89, wrinkle: 92, acne: 88, pore: 83 } }
+];
+function loadSample() {
+  const day = 86400000, now = Date.now();
+  const sample = SAMPLE_SCORES.map((h, i) => ({ id: 'sample' + i, ts: now - h.d * day, scores: h.s, skinAge: null, thumb: null, sample: true }));
+  checks = [...sample, ...checks]; store.set('st_checks', checks);
+  if (!products.length) {
+    products = [
+      { id: 'sp1', name: 'Hydrating serum (sample)', concerns: ['moisture', 'radiance'], startedTs: now - 28 * day },
+      { id: 'sp2', name: '10% niacinamide serum (sample)', concerns: ['redness', 'oiliness', 'acne'], startedTs: now - 14 * day }
+    ];
+    store.set('st_products', products);
+  }
+  renderProgress(); renderReport(); renderProducts();
+}
+function clearSample() {
+  checks = checks.filter(c => !c.sample); store.set('st_checks', checks);
+  products = products.filter(p => !String(p.id).startsWith('sp')); store.set('st_products', products);
+  renderProgress(); renderReport(); renderProducts();
+}
+document.addEventListener('click', e => {
+  if (e.target.id === 'btn-load-sample') loadSample();
+  if (e.target.id === 'btn-clear-sample') clearSample();
+});
 
 /* ---------- rendering: latest scores ---------- */
 function scoreClass(v) { return v >= 80 ? 'good' : v >= 60 ? 'mid' : 'low'; }
@@ -115,7 +162,7 @@ function renderProgress() {
   if (!has) return;
   const base = checks[0], latest = checks[checks.length - 1];
   let html = '';
-  if (checks.some(c => c.sample)) html += '<p class="sample-badge">Sample data - this history is illustrative. Only your own live analyses are real measurements.</p>';
+  if (checks.some(c => c.sample)) html += '<p class="sample-badge">Sample journey shown for illustration (sample points below). It never feeds the Verdict tab. <button id="btn-clear-sample" class="linkbtn">Remove sample data</button></p>';
   html += `<p>${checks.length} check(s). Baseline ${new Date(base.ts).toLocaleDateString()}, latest ${new Date(latest.ts).toLocaleDateString()}.</p>`;
   html += CONCERNS.map(([k, label]) => {
     const series = checks.map(c => c.scores[k]);
@@ -159,9 +206,38 @@ const label = (k) => (CONCERNS.find(c => c[0] === k) || [k, k])[1];
 const esc = (s) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ---------- verdict ---------- */
+/* Honest attribution engine. Rules:
+   - sample-flagged checks never feed verdict math (disclosure is not isolation)
+   - a product verdict needs a check at/before its start AND a follow-up after
+   - structural concerns need ~14 days; surface concerns ~3 days
+   - wording states association, never proven efficacy                      */
+const SURFACE = ['moisture', 'oiliness', 'redness'];
+const MIN_DAYS = c => SURFACE.includes(c) ? 3 : 14;
+const realChecks = () => checks.filter(c => !c.sample);
+function productVerdict(p, concern) {
+  const real = realChecks();
+  const pre = real.filter(c => c.ts <= p.startedTs);
+  const post = real.filter(c => c.ts > p.startedTs);
+  if (!pre.length) return { cls: 'flat', text: 'no check from before you started it - verdict impossible' };
+  if (!post.length) return { cls: 'flat', text: 'no follow-up check yet' };
+  const latest = post[post.length - 1];
+  const days = Math.round((latest.ts - p.startedTs) / 86400000);
+  if (days < MIN_DAYS(concern)) return { cls: 'flat', text: `too early to tell (${days}d in; needs ~${MIN_DAYS(concern)}d)` };
+  const d = latest.scores[concern] - pre[pre.length - 1].scores[concern];
+  if (d >= 5) return { cls: 'up', text: `scores up +${d} since you started (${days}d) - an association, not proof` };
+  if (d <= -5) return { cls: 'down', text: `scores down ${d} since you started (${days}d) - worth reviewing your routine` };
+  return { cls: 'flat', text: `no clear score change since you started (${d > 0 ? '+' : ''}${d} in ${days}d)` };
+}
+const PIVOT = {
+  moisture: 'hyaluronic acid or ceramides', oiliness: 'niacinamide or salicylic acid',
+  redness: 'azelaic acid or centella asiatica', acne: 'benzoyl peroxide or adapalene',
+  pore: 'niacinamide or retinoids', texture: 'AHA/BHA exfoliants or retinoids',
+  wrinkle: 'retinoids or peptides', radiance: 'vitamin C or gentle exfoliation'
+};
 function verdictFor(concern) {
-  if (checks.length < 2) return null;
-  const base = checks[0], latest = checks[checks.length - 1];
+  const real = realChecks();
+  if (real.length < 2) return null;
+  const base = real[0], latest = real[real.length - 1];
   const d = latest.scores[concern] - base.scores[concern];
   const days = Math.max(1, Math.round((latest.ts - base.ts) / 86400000));
   if (d >= 5) return { cls: 'up', text: `improving (+${d} in ${days}d)` };
@@ -169,22 +245,25 @@ function verdictFor(concern) {
   return { cls: 'flat', text: `no clear change (${d > 0 ? '+' : ''}${d} in ${days}d)` };
 }
 function renderReport() {
-  const ready = checks.length >= 2;
+  const ready = realChecks().length >= 2;
   $('#report-empty').style.display = ready ? 'none' : 'block';
+  $('#report-content').innerHTML = '';
   if (!ready) return;
   let html = '';
-  if (checks.some(c => c.sample)) html += '<p class="sample-badge">Sample data - the history behind these verdicts is illustrative. Only your own live analyses are real measurements.</p>';
-  html += '<h3>What is working</h3>';
+  if (checks.some(c => c.sample)) html += '<p class="sample-badge">Sample data - the sample journey shows in Progress but never feeds these verdicts. Only your own live analyses count.</p>';
+  html += '<h3>What your checks say about your products</h3>';
   if (!products.length) html += '<p class="muted">Add products first so verdicts can name them.</p>';
   html += products.map(p => {
-    const vs = p.concerns.map(c => ({ c, v: verdictFor(c) })).filter(x => x.v);
-    if (!vs.length) return `<div class="product"><b>${esc(p.name)}</b><p class="muted">No data yet.</p></div>`;
+    const vs = p.concerns.map(c => ({ c, v: productVerdict(p, c) }));
     const worst = vs.find(x => x.v.cls === 'down');
     const best = vs.find(x => x.v.cls === 'up');
-    const head = worst ? 'Consider dropping or swapping' : best ? 'Keep using - it is working' : 'No measurable effect yet';
+    const head = worst ? 'Worth reviewing' : best ? 'Trending the right way' : 'No verdict yet';
     const headCls = worst ? 'down' : best ? 'up' : 'flat';
-    return `<div class="product verdict ${headCls}"><div class="vhead">${head}</div><b>${esc(p.name)}</b><ul>${vs.map(x => `<li><span class="delta ${x.v.cls}">${label(x.c)}</span> ${x.v.text}</li>`).join('')}</ul></div>`;
+    const pivots = vs.filter(x => x.v.cls === 'down' || (x.v.cls === 'flat' && /no clear/.test(x.v.text)))
+      .map(x => `<li class="muted">Not moving on ${label(x.c)}? Ingredients often used for it: ${PIVOT[x.c]}.</li>`).join('');
+    return `<div class="product verdict ${headCls}"><div class="vhead">${head}</div><b>${esc(p.name)}</b><ul>${vs.map(x => `<li><span class="delta ${x.v.cls}">${label(x.c)}</span> ${x.v.text}</li>`).join('')}${pivots}</ul></div>`;
   }).join('');
+  html += '<p class="muted small">SkinTruth reports score trends during product use. It cannot prove a product caused a change - lighting, weather, hormones and other products all move scores. The 5-point cutoff is an unvalidated heuristic, not statistical or clinical significance.</p>';
   html += '<h3>Overall</h3>' + CONCERNS.map(([k, l]) => {
     const v = verdictFor(k);
     return v ? `<div class="score-row"><span>${l}</span><span class="delta ${v.cls}">${v.text}</span></div>` : '';

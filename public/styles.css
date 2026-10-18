@@ -46,3 +46,5 @@ footer { margin-top:30px; color:var(--muted); font-size:11px; text-align:center;
 .product .del { display:inline-block; margin-top:6px; }
 .product .chip { margin:2px 4px 2px 0; }
 .sample-badge { display:inline-block; background:#3a2f0b; color:#f5c518; border:1px solid #6b5a12; border-radius:8px; padding:6px 10px; font-size:12px; font-weight:600; margin:4px 0 12px; }
+.linkbtn { background:none; border:none; color:var(--accent,#6c5ce7); text-decoration:underline; cursor:pointer; font-size:inherit; padding:0; }
+.muted.small { font-size:12px; }
