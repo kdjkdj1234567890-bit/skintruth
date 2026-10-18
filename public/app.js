@@ -276,8 +276,8 @@ function overlapWarn(p, concern) {
     && q.startedTs <= Date.now() && !(q.endedTs && q.endedTs < p.startedTs));
   return others.length ? ` - attribution unclear: ${others.length} product(s) target the same concern` : '';
 }
-function productVerdict(p, concern) {
-  const real = realChecks();
+function productVerdict(p, concern, pool) {
+  const real = pool || realChecks();
   const pre = real.filter(c => c.ts <= p.startedTs);
   const post = real.filter(c => c.ts > p.startedTs);
   if (!pre.length) return { cls: 'flat', text: 'no check from before you started it - verdict impossible' };
@@ -307,25 +307,36 @@ function verdictFor(concern) {
   if (d <= -5) return { cls: 'down', text: `getting worse (${d} in ${days}d)` };
   return { cls: 'flat', text: `no clear change (${d > 0 ? '+' : ''}${d} in ${days}d)` };
 }
+function verdictCard(p, pool) {
+  const vs = p.concerns.map(c => ({ c, v: productVerdict(p, c, pool) }));
+  const worst = vs.find(x => x.v.cls === 'down');
+  const best = vs.find(x => x.v.cls === 'up');
+  const head = worst ? 'Worth reviewing' : best ? 'Trending the right way' : 'No verdict yet';
+  const headCls = worst ? 'down' : best ? 'up' : 'flat';
+  const pivots = vs.filter(x => x.v.cls === 'down' || (x.v.cls === 'flat' && /no clear/.test(x.v.text)))
+    .map(x => `<li class="muted">Not moving on ${label(x.c)}? Ingredients often used for it: ${PIVOT[x.c]}.</li>`).join('');
+  return `<div class="product verdict ${headCls}"><div class="vhead">${head}</div><b>${esc(p.name)}</b><ul>${vs.map(x => `<li><span class="delta ${x.v.cls}">${label(x.c)}</span> ${x.v.text}</li>`).join('')}${pivots}</ul></div>`;
+}
 function renderReport() {
   const ready = realChecks().length >= 2;
-  $('#report-empty').style.display = ready ? 'none' : 'block';
+  const hasSample = checks.some(c => c.sample);
+  $('#report-empty').style.display = (ready || hasSample) ? 'none' : 'block';
   $('#report-content').innerHTML = '';
-  if (!ready) return;
+  if (!ready) {
+    if (hasSample) {
+      const spool = checks.filter(c => c.sample);
+      const sprods = products.filter(p => String(p.id).startsWith('sp'));
+      $('#report-content').innerHTML =
+        '<p class="sample-badge">Sample verdicts from the illustrative journey below - they never mix with your real checks. Your own verdicts appear here once you have a baseline and follow-ups.</p>'
+        + sprods.map(p => verdictCard(p, spool)).join('');
+    }
+    return;
+  }
   let html = '';
   if (checks.some(c => c.sample)) html += '<p class="sample-badge">Sample data - the sample journey shows in Progress but never feeds these verdicts. Only your own live analyses count.</p>';
   html += '<h3>What your checks say about your products</h3>';
   if (!products.length) html += '<p class="muted">Add products first so verdicts can name them.</p>';
-  html += products.map(p => {
-    const vs = p.concerns.map(c => ({ c, v: productVerdict(p, c) }));
-    const worst = vs.find(x => x.v.cls === 'down');
-    const best = vs.find(x => x.v.cls === 'up');
-    const head = worst ? 'Worth reviewing' : best ? 'Trending the right way' : 'No verdict yet';
-    const headCls = worst ? 'down' : best ? 'up' : 'flat';
-    const pivots = vs.filter(x => x.v.cls === 'down' || (x.v.cls === 'flat' && /no clear/.test(x.v.text)))
-      .map(x => `<li class="muted">Not moving on ${label(x.c)}? Ingredients often used for it: ${PIVOT[x.c]}.</li>`).join('');
-    return `<div class="product verdict ${headCls}"><div class="vhead">${head}</div><b>${esc(p.name)}</b><ul>${vs.map(x => `<li><span class="delta ${x.v.cls}">${label(x.c)}</span> ${x.v.text}</li>`).join('')}${pivots}</ul></div>`;
-  }).join('');
+  html += products.map(p => verdictCard(p)).join('');
   html += '<p class="muted small">SkinTruth reports score trends during product use. It cannot prove a product caused a change - lighting, weather, hormones and other products all move scores. The 5-point cutoff is an unvalidated heuristic, not statistical or clinical significance. The lighting caution is a rough proxy - an unflagged pair of photos can still differ in light.</p>';
   html += '<h3>Overall</h3>' + CONCERNS.map(([k, l]) => {
     const v = verdictFor(k);
