@@ -44,8 +44,9 @@ transparent and auditable.
   products live in the browser's localStorage: no accounts, no tracking, no
   database. Photos are sent to the SkinTruth backend only to be forwarded to
   the YouCam API for analysis; nothing is stored server-side.
-- The verdict engine compares latest vs baseline scores per concern with a
-  ±5-point significance threshold.
+- The verdict engine compares the latest score with the baseline score per
+  concern; the 5-point cutoff is labeled an unvalidated heuristic, not
+  statistical significance.
 
 ## Challenges we ran into
 - The API requires the face to cover most of the frame, so the app guides
