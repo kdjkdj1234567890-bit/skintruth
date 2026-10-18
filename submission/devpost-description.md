@@ -17,7 +17,9 @@ actually working?
    balance, redness, acne, pores, texture, wrinkles, radiance), each 0-100.
 2. **Progress** - Every check is stored on your device. Sparkline charts show
    how each concern moved since your baseline, with the delta ("+13 vs
-   baseline").
+   baseline"). (In the demo video and screenshots, the multi-week history is
+   clearly labeled sample data for illustration - only the live analysis is a
+   real API measurement.)
 3. **Products** - Log the products you are using and the concerns each one
    targets.
 4. **Verdict** - SkinTruth ties measured score changes to the products you
@@ -49,7 +51,8 @@ transparent and auditable.
 
 ## Accomplishments that we're proud of
 - A real end-to-end product in the hackathon window: live deployment, real API
-  integration, real measurements.
+  integration, real measurements. Demo history is visibly badged as sample
+  data in the app itself; we do not present simulated trends as real results.
 - Privacy by architecture: no sign-up, no server-side photos, no database.
 - The verdict phrasing is honest - "no measurable effect yet" is a first-class
   result, not an error.

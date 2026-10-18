@@ -114,7 +114,9 @@ function renderProgress() {
   $('#progress-empty').style.display = has ? 'none' : 'block';
   if (!has) return;
   const base = checks[0], latest = checks[checks.length - 1];
-  let html = `<p>${checks.length} check(s). Baseline ${new Date(base.ts).toLocaleDateString()}, latest ${new Date(latest.ts).toLocaleDateString()}.</p>`;
+  let html = '';
+  if (checks.some(c => c.sample)) html += '<p class="sample-badge">Sample data - this history is illustrative. Only your own live analyses are real measurements.</p>';
+  html += `<p>${checks.length} check(s). Baseline ${new Date(base.ts).toLocaleDateString()}, latest ${new Date(latest.ts).toLocaleDateString()}.</p>`;
   html += CONCERNS.map(([k, label]) => {
     const series = checks.map(c => c.scores[k]);
     const delta = latest.scores[k] - base.scores[k];
@@ -170,7 +172,9 @@ function renderReport() {
   const ready = checks.length >= 2;
   $('#report-empty').style.display = ready ? 'none' : 'block';
   if (!ready) return;
-  let html = '<h3>What is working</h3>';
+  let html = '';
+  if (checks.some(c => c.sample)) html += '<p class="sample-badge">Sample data - the history behind these verdicts is illustrative. Only your own live analyses are real measurements.</p>';
+  html += '<h3>What is working</h3>';
   if (!products.length) html += '<p class="muted">Add products first so verdicts can name them.</p>';
   html += products.map(p => {
     const vs = p.concerns.map(c => ({ c, v: verdictFor(c) })).filter(x => x.v);
