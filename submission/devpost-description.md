@@ -82,8 +82,6 @@ transparent and auditable.
 - How much framing/face-size constraints matter for consumer selfie flows.
 
 ## What's next for SkinTruth
-- Before/after overlays using the API's concern heat-map masks.
-- Capture-condition matching (lighting/framing consistency score vs baseline)
-  to cut measurement noise.
 - Rolling averages across repeated checks and a confidence indicator.
+- Framing consistency (pose/angle) on top of the current lighting proxy.
 - Export/import of on-device history, reminders to re-check, optional sync.
