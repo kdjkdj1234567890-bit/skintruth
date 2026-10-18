@@ -1,0 +1,7 @@
+{
+  "name": "skintruth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SkinTruth - is your skincare actually working? Progress tracker built on the YouCam AI Skin Analysis API.",
+  "scripts": { "dev": "vercel dev" }
+}

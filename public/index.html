@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkinTruth - Is your skincare actually working?</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <div class="brand">Skin<span>Truth</span></div>
+  <div class="tagline">Is your skincare actually working? Prove it with data.</div>
+  <div id="quota" class="quota"></div>
+</header>
+
+<nav>
+  <button data-tab="check" class="active">Check</button>
+  <button data-tab="progress">Progress</button>
+  <button data-tab="products">Products</button>
+  <button data-tab="report">Verdict</button>
+</nav>
+
+<main>
+  <section id="tab-check" class="tab active">
+    <div id="capture-box">
+      <video id="cam" playsinline autoplay muted hidden></video>
+      <img id="preview" alt="selfie preview" hidden>
+      <div id="drop-hint">Take or upload a front-facing selfie. Face should fill most of the frame, hair down, even lighting.</div>
+    </div>
+    <div class="row">
+      <button id="btn-cam">Use camera</button>
+      <label class="filebtn">Upload photo<input id="file" type="file" accept="image/*" hidden></label>
+      <button id="btn-shoot" hidden>Capture</button>
+    </div>
+    <div class="row">
+      <button id="btn-analyze" disabled>Analyze my skin</button>
+    </div>
+    <div id="analyze-status" class="status"></div>
+    <div id="last-scores"></div>
+  </section>
+
+  <section id="tab-progress" class="tab">
+    <div id="progress-empty" class="empty">Run at least one check to see your progress.</div>
+    <div id="progress-content"></div>
+  </section>
+
+  <section id="tab-products" class="tab">
+    <form id="product-form">
+      <input id="p-name" placeholder="Product name (e.g. Retinol serum 0.3%)" required>
+      <div id="p-concerns" class="chips"></div>
+      <button type="submit">Add product</button>
+    </form>
+    <div id="product-list"></div>
+  </section>
+
+  <section id="tab-report" class="tab">
+    <div id="report-empty" class="empty">You need a baseline plus at least one follow-up check for a verdict.</div>
+    <div id="report-content"></div>
+  </section>
+</main>
+
+<footer>Built with the YouCam AI Skin Analysis API (Perfect Corp) - YouCam API Skin AI &amp; eCommerce VTO Hackathon.</footer>
+<script src="app.js"></script>
+</body>
+</html>
