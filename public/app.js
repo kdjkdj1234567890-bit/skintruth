@@ -204,8 +204,8 @@ function renderOverlays() {
   if (!lastOverlays) { box.innerHTML = ''; return; }
   const chips = CONCERNS.filter(([k]) => lastOverlays.masks[k]).map(([k, label]) =>
     `<button class="chip ochip${overlayOn === k ? ' on' : ''}" data-k="${k}">${label}</button>`).join('');
-  box.innerHTML = `<h3>Where the AI looked</h3>
-    <p class="muted small">Concern heatmaps from the YouCam analysis, overlaid on your photo. Available right after each analysis.</p>
+  box.innerHTML = `<h3>AI-generated concern maps</h3>
+    <p class="muted small">Maps from the YouCam analysis, overlaid on your photo. They highlight image regions associated with each score - they are not an explanation of the model's reasoning. Available right after each analysis.</p>
     <div class="ochips">${chips}</div>
     <div class="overlay-wrap"><img class="base" src="${lastOverlays.base_url}" alt="analyzed photo">${overlayOn && lastOverlays.masks[overlayOn] ? `<img class="mask" src="${lastOverlays.masks[overlayOn]}" alt="${overlayOn} heatmap">` : ''}</div>`;
   box.querySelectorAll('.ochip').forEach(b => b.onclick = () => { overlayOn = overlayOn === b.dataset.k ? null : b.dataset.k; renderOverlays(); });
@@ -326,7 +326,7 @@ function renderReport() {
       .map(x => `<li class="muted">Not moving on ${label(x.c)}? Ingredients often used for it: ${PIVOT[x.c]}.</li>`).join('');
     return `<div class="product verdict ${headCls}"><div class="vhead">${head}</div><b>${esc(p.name)}</b><ul>${vs.map(x => `<li><span class="delta ${x.v.cls}">${label(x.c)}</span> ${x.v.text}</li>`).join('')}${pivots}</ul></div>`;
   }).join('');
-  html += '<p class="muted small">SkinTruth reports score trends during product use. It cannot prove a product caused a change - lighting, weather, hormones and other products all move scores. The 5-point cutoff is an unvalidated heuristic, not statistical or clinical significance.</p>';
+  html += '<p class="muted small">SkinTruth reports score trends during product use. It cannot prove a product caused a change - lighting, weather, hormones and other products all move scores. The 5-point cutoff is an unvalidated heuristic, not statistical or clinical significance. The lighting caution is a rough proxy - an unflagged pair of photos can still differ in light.</p>';
   html += '<h3>Overall</h3>' + CONCERNS.map(([k, l]) => {
     const v = verdictFor(k);
     return v ? `<div class="score-row"><span>${l}</span><span class="delta ${v.cls}">${v.text}</span></div>` : '';
