@@ -214,6 +214,11 @@ const esc = (s) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': 
 const SURFACE = ['moisture', 'oiliness', 'redness'];
 const MIN_DAYS = c => SURFACE.includes(c) ? 3 : 14;
 const realChecks = () => checks.filter(c => !c.sample);
+function overlapWarn(p, concern) {
+  const others = products.filter(q => q.id !== p.id && q.concerns.includes(concern)
+    && q.startedTs <= Date.now() && !(q.endedTs && q.endedTs < p.startedTs));
+  return others.length ? ` - attribution unclear: ${others.length} product(s) target the same concern` : '';
+}
 function productVerdict(p, concern) {
   const real = realChecks();
   const pre = real.filter(c => c.ts <= p.startedTs);
@@ -224,9 +229,10 @@ function productVerdict(p, concern) {
   const days = Math.round((latest.ts - p.startedTs) / 86400000);
   if (days < MIN_DAYS(concern)) return { cls: 'flat', text: `too early to tell (${days}d in; needs ~${MIN_DAYS(concern)}d)` };
   const d = latest.scores[concern] - pre[pre.length - 1].scores[concern];
-  if (d >= 5) return { cls: 'up', text: `scores up +${d} since you started (${days}d) - an association, not proof` };
-  if (d <= -5) return { cls: 'down', text: `scores down ${d} since you started (${days}d) - worth reviewing your routine` };
-  return { cls: 'flat', text: `no clear score change since you started (${d > 0 ? '+' : ''}${d} in ${days}d)` };
+  const ow = overlapWarn(p, concern);
+  if (d >= 5) return { cls: 'up', text: `scores up +${d} since you started (${days}d) - an association, not proof${ow}` };
+  if (d <= -5) return { cls: 'down', text: `scores down ${d} since you started (${days}d) - worth reviewing your routine${ow}` };
+  return { cls: 'flat', text: `no clear score change since you started (${d > 0 ? '+' : ''}${d} in ${days}d)${ow}` };
 }
 const PIVOT = {
   moisture: 'hyaluronic acid or ceramides', oiliness: 'niacinamide or salicylic acid',
