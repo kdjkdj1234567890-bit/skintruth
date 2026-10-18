@@ -40,6 +40,13 @@ transparent and auditable.
   upload flow: presigned upload, task creation, polling.
 - **Node.js serverless functions** on Vercel (`/api/analyze`, `/api/result`,
   `/api/balance`) hold the API key server-side - the browser never sees it.
+- **Concern heatmap overlays**: each analysis also returns the API's
+  per-concern masks, overlaid on the analyzed photo right after the check so
+  you can see where the AI looked (signed URLs, shown live, never stored).
+- **Lighting-consistency caution**: the app computes a rough luminance proxy
+  for every photo and flags comparisons where two photos were taken in
+  clearly different light - because lighting moves skin scores, and honest
+  tracking has to say so.
 - **Zero-dependency front end** (vanilla HTML/CSS/JS). All history and
   products live in the browser's localStorage: no accounts, no tracking, no
   database. Photos are sent to the SkinTruth backend only to be forwarded to

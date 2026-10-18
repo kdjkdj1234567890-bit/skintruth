@@ -7,11 +7,48 @@ const CONCERNS = [
 const $ = (s) => document.querySelector(s);
 const store = {
   get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
-  set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
+  set(k, v) {
+    try { localStorage.setItem(k, JSON.stringify(v)); }
+    catch { const w = document.querySelector('#storage-warn'); if (w) w.hidden = false; }
+  },
 };
 let checks = store.get('st_checks', []);
 let products = store.get('st_products', []);
 let currentImage = null; // PNG data URL, face-cropped by the user flow
+let pendingLight = null;  // rough lighting proxy for the photo being analyzed
+let lastOverlays = null;  // { base_url, masks } from the most recent analysis (signed, ~2h)
+
+/* Rough lighting proxy (mean luminance, 0-255) from a downscaled copy of the photo.
+   Not a measurement - just enough to flag "these two photos were taken in
+   clearly different light", because lighting moves skin scores. */
+function lightStats(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const w = 48, h = Math.max(1, Math.round(img.height * (w / img.width)));
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0, w, h);
+      const d = cx.getImageData(0, 0, w, h).data;
+      let sum = 0, sum2 = 0, n = d.length / 4;
+      for (let i = 0; i < d.length; i += 4) {
+        const l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+        sum += l; sum2 += l * l;
+      }
+      const mean = sum / n;
+      resolve({ mean: Math.round(mean), std: Math.round(Math.sqrt(Math.max(0, sum2 / n - mean * mean))) });
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+function lightHint(l) {
+  if (!l) return '';
+  if (l.mean < 55) return 'This photo looks dark. Even, brighter light makes your checks more comparable.';
+  if (l.mean > 205) return 'This photo looks overexposed. Softer light makes your checks more comparable.';
+  return '';
+}
+const lightDiffers = (a, b) => a && b && a.light && b.light && Math.abs(a.light.mean - b.light.mean) > 18;
+const LIGHT_NOTE = 'photos differ clearly in lighting, which can move scores';
 
 /* ---------- tabs ---------- */
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
@@ -60,9 +97,13 @@ $('#file').onchange = (e) => {
   };
   img.src = URL.createObjectURL(f);
 };
-function setImage(dataUrl) {
+async function setImage(dataUrl) {
   currentImage = dataUrl;
   const p = $('#preview'); p.src = dataUrl; p.hidden = false;
+  $('#btn-analyze').disabled = true;
+  $('#analyze-status').textContent = '';
+  pendingLight = await lightStats(dataUrl);
+  $('#analyze-status').textContent = lightHint(pendingLight);
   $('#btn-analyze').disabled = false;
 }
 
@@ -82,10 +123,11 @@ $('#btn-analyze').onclick = async () => {
     if (!res.scores || !keys.every(k => Number.isFinite(res.scores[k]) && res.scores[k] >= 0 && res.scores[k] <= 100))
       throw new Error('analysis returned incomplete scores - nothing saved');
     const thumb = await makeThumb(currentImage);
-    const check = { id: 'c' + Date.now(), ts: Date.now(), scores: res.scores, skinAge: res.skin_age, thumb };
+    const check = { id: 'c' + Date.now(), ts: Date.now(), scores: res.scores, skinAge: res.skin_age, thumb, light: pendingLight };
     checks.push(check); store.set('st_checks', checks);
     st.textContent = 'Done.';
-    renderScores(check); refreshQuota();
+    lastOverlays = (res.masks && Object.keys(res.masks).length && res.base_url) ? { base_url: res.base_url, masks: res.masks } : null;
+    renderScores(check); renderOverlays(); refreshQuota();
   } catch (e) {
     st.textContent = 'Failed: ' + e.message;
   } finally {
@@ -155,6 +197,20 @@ function renderScores(check) {
     (check.skinAge ? `<p>Estimated skin age: <b>${check.skinAge}</b></p>` : '');
 }
 
+/* ---------- concern overlays (YouCam heatmaps, shown right after analysis) ---------- */
+let overlayOn = null;
+function renderOverlays() {
+  const box = $('#overlay-view');
+  if (!lastOverlays) { box.innerHTML = ''; return; }
+  const chips = CONCERNS.filter(([k]) => lastOverlays.masks[k]).map(([k, label]) =>
+    `<button class="chip ochip${overlayOn === k ? ' on' : ''}" data-k="${k}">${label}</button>`).join('');
+  box.innerHTML = `<h3>Where the AI looked</h3>
+    <p class="muted small">Concern heatmaps from the YouCam analysis, overlaid on your photo. Available right after each analysis.</p>
+    <div class="ochips">${chips}</div>
+    <div class="overlay-wrap"><img class="base" src="${lastOverlays.base_url}" alt="analyzed photo">${overlayOn && lastOverlays.masks[overlayOn] ? `<img class="mask" src="${lastOverlays.masks[overlayOn]}" alt="${overlayOn} heatmap">` : ''}</div>`;
+  box.querySelectorAll('.ochip').forEach(b => b.onclick = () => { overlayOn = overlayOn === b.dataset.k ? null : b.dataset.k; renderOverlays(); });
+}
+
 /* ---------- progress ---------- */
 function renderProgress() {
   const has = checks.length > 0;
@@ -164,6 +220,7 @@ function renderProgress() {
   let html = '';
   if (checks.some(c => c.sample)) html += '<p class="sample-badge">Sample journey shown for illustration (sample points below). It never feeds the Verdict tab. <button id="btn-clear-sample" class="linkbtn">Remove sample data</button></p>';
   html += `<p>${checks.length} check(s). Baseline ${new Date(base.ts).toLocaleDateString()}, latest ${new Date(latest.ts).toLocaleDateString()}.</p>`;
+  if (lightDiffers(base, latest)) html += `<p class="sample-badge light-badge">Caution: your baseline and latest ${LIGHT_NOTE}.</p>`;
   html += CONCERNS.map(([k, label]) => {
     const series = checks.map(c => c.scores[k]);
     const delta = latest.scores[k] - base.scores[k];
@@ -229,7 +286,7 @@ function productVerdict(p, concern) {
   const days = Math.round((latest.ts - p.startedTs) / 86400000);
   if (days < MIN_DAYS(concern)) return { cls: 'flat', text: `too early to tell (${days}d in; needs ~${MIN_DAYS(concern)}d)` };
   const d = latest.scores[concern] - pre[pre.length - 1].scores[concern];
-  const ow = overlapWarn(p, concern);
+  const ow = overlapWarn(p, concern) + (lightDiffers(pre[pre.length - 1], latest) ? ` - ${LIGHT_NOTE}` : '');
   if (d >= 5) return { cls: 'up', text: `scores up +${d} since you started (${days}d) - an association, not proof${ow}` };
   if (d <= -5) return { cls: 'down', text: `scores down ${d} since you started (${days}d) - worth reviewing your routine${ow}` };
   return { cls: 'flat', text: `no clear score change since you started (${d > 0 ? '+' : ''}${d} in ${days}d)${ow}` };
